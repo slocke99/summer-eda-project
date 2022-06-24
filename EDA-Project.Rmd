@@ -24,18 +24,209 @@ knitr::opts_chunk$set(
   warning = FALSE,
   hiline = TRUE)
 
+# Imported imported libraries
 library(tidyverse)
+library(usmap)
 library(ggplot2)
 library(dplyr)
+library(plotly)
+library(maps)
 library(ggridges)
 ```
 
-```{r xaringan-themer, include=FALSE, warning=FALSE}
+``````{r xaringan-themer, include=FALSE, warning=FALSE}
 library(xaringanthemer)
-style_mono_accent(base_color = "#cc002b")
+style_duo_accent(
+  primary_color = "#1381B0",
+  secondary_color = "#FF961C",
+  inverse_header_color = "#FFFFFF"
+)
+#loading packages
+library(tidyverse)
+library(ggrepel)
+#loading medicare data
+medicare <- read_csv("http://www.stat.cmu.edu/cmsac/sure/2022/materials/data/health/eda_projects/medicare_partd_presc_claims.csv")
+#loading state populations data
+populations_2019 <- read_csv("state-populations-2019.csv")
+populations_2019 <- as.vector(populations_2019$population)
+#normalizing claims by population
+avgNumClaims <- medicare %>%
+  group_by(state = State, opioid = OpioidFlag) %>%
+  summarize(sumNumberClaims = sum(NumberClaims))
+avgNumClaims$population <- populations_2019
+avgNumClaims_n <- avgNumClaims %>%
+  mutate(numClaimsPer10000 = sumNumberClaims / population * 10000)
+#filtering for only opioid prescription claims
+opioidOnly <-  avgNumClaims_n %>%
+  filter(opioid == "Opioid")
 
 ```
 
+## Medicare Part D Prescription Claims Data
+
+- 51,695 data points proportionally sampled across 50 US States + DC about drugs prescribed by health care providers
+
+--
+
+.pull-left[
+  ### Categorical Variables:
+  - Provider's name, age, city, state, and specialty
+  - Drug name, whether or not the drug is an opioid
+]
+
+--
+
+.pull-right[
+  ### Continuous Variables:
+  - drug cost
+  - number of drug fills, number of days' supply
+  - number of total drug claims, number of drug claims for those aged 65+
+] 
+---
+---
+
+class: left
+
+## Hypothesis: States with smaller populations prescribe more opioids
+
+
+---
+
+class: full-scale-fig
+
+# Are smaller states prescribing more opioids?
+
+```{r, include=TRUE, fig.align='center', echo=FALSE}
+opioidOnly %>%
+  ggplot(aes(x=log(population), y=numClaimsPer10000, label=state)) +
+  geom_text_repel(color="red", size=2) +
+  scale_color_viridis_c() +
+  labs(x = "log(State Population)", y="Opioid Prescription Claims per 10,000 residents",
+       main="Opioid Prescription Claims by State") +
+  geom_point() +
+  theme_minimal() +
+  theme(axis.title = element_text(size=8))
+```
+
+--
+
+### No.
+
+---
+
+- States with the lowest population have some of the lowest claims for opioid medications in the United States
+
+--
+
+- The state with the highest number of opioid prescriptions (WV) does have a smaller population
+
+--
+
+- States with higher populations (CA, TX) have lower levels of opioid prescriptions
+---
+###Hypothesis/Background:
+
+
+####Opiods might be contributing unnecessarily to the overall drug cost in most state: According to the The SPACE Randomized Clinical Trial, "the use of opioid versus nonopioid drugs did not result in significantly better pain-related illnesses such as back pain and knee pain over 12 months." 
+  -- Krebs EE, Gravely A, Nugent S, et al. Effect of Opioid vs Nonopioid Medications on Pain-Related Function in Patients With Chronic Back Pain or Hip or Knee Osteoarthritis Pain: The SPACE Randomized Clinical Trial. JAMA. 2018
+    
+
+
+
+
+
+```{r, results = "hide",include = FALSE, echo = FALSE}
+#Used the read_csv command to import our drug cost data
+presc_claims <- 
+  read_csv("http://www.stat.cmu.edu/cmsac/sure/2022/materials/data/health/eda_projects/medicare_partd_presc_claims.csv")
+# How the price of Medical oncology drugs Varies By state
+presc_new <- presc_claims %>%
+  select(State, OpioidFlag, TotalDrugCost, BrandName)%>%
+  aggregate(TotalDrugCost ~ OpioidFlag + State  , mean) %>%
+  filter(State %in% c("CA", "FL", "GA", "KS", "KY", "MA", "MD", "MO", "NC",  "NH", "NJ", "NV", "NY", "OK", "OR", "SC", "UT", "VA", "VT", "WV") )%>%
+  filter(TotalDrugCost > 2000)
+NewTabl <- presc_new %>%
+  select(State, TotalDrugCost) %>%
+  aggregate(TotalDrugCost ~ State, mean)
+  #filter(TotalDrugCost > 1000) %>%
+  #filter(State %in% c("AZ","ME", "MI", "MO", "NC", "ND", "NH", "NJ", "NV", "NY", "OK", "OR", "PA", "SC", "SD", "TN", "UT", "VA", "VT", "WV") )
+NewTabl
+```
+---
+###Reasons for higher overall drug cost in some states than others:
+1) Aging population: Vermont, for example is a state with almost 20% being age 65 and above. The older the population, the more access to healthcare will be needed and hence the more opportunity for healthcare providers to drive up cost to make profit
+
+
+2) Cost of living: States such DC, California with high cost of living tend to have higher health care cost. 
+
+
+3)Unhealthy population: Of course the more unhealthy a population is, the more it would have to spend on healthcare 
+
+
+4)Inflation: Drug prices are not immune from the effect of inflation. In fact,during inflation,  the prices of health care services have increased faster than the cost of other goods and services in the U.S. economy. 
+
+5) Lack of government regulation.
+
+
+---
+
+### Bar chart visualizing how health care cost varies with state
+The graph below shows the cost of healthcare of in 20 of the most expensive states.
+
+
+```{r , echo = FALSE, fig.align = 'center', include = TRUE}
+# Raw bar chart
+NewTabl %>%
+  ggplot (aes (x=reorder (State, -TotalDrugCost) ,y= TotalDrugCost))+
+  geom_bar(stat ="identity")+
+  theme_bw()
+```
+
+---
+###Data showing how opiod affects the cost of drugs in each states:
+
+```{r, echo = FALSE, fig.align = 'center', include = TRUE}
+#Spine bar chart showing the cost by state with individual opioid and non-opioid proportions
+presc_new %>%
+  ggplot(aes(x = reorder (State, -TotalDrugCost),
+             y = TotalDrugCost,
+             fill = OpioidFlag)) + #<<
+  geom_col() + theme_bw()+
+  ggthemes::scale_fill_colorblind()
+```
+States like New Haven have a higher cost of opioids compared to non-opioid drugs.
+---
+
+![](https://cdn.howmuch.net/articles/annual-deductible-insurance-c963.png)
+
+---
+### US map showing the variation of drug cost by statep
+
+```{r, echo = FALSE, fig.align = 'center', include = TRUE}
+#filtered Healthcare data aggregated by Total drug cost and Opioid flag
+presc_new <- presc_claims %>%
+  select(State, OpioidFlag, TotalDrugCost, BrandName)%>%
+  aggregate(TotalDrugCost ~ OpioidFlag + State  , mean) %>%
+  #filter(State %in% c("CA", "FL", "GA", "KS", "KY", "MA", "MD", "MO", "NC",  "NH", "NJ", "NV", "NY", "OK", "OR", "SC", "UT", "VA", "VT", "WV") )%>%
+  filter(TotalDrugCost > 2000)
+#healthcare data reformatted 
+NewTabl <- presc_new %>%
+  select(State, TotalDrugCost) %>%
+  aggregate(TotalDrugCost ~ State, mean)
+  #filter(TotalDrugCost > 1000) %>%
+  #filter(State %in% c("AZ","ME", "MI", "MO", "NC", "ND", "NH", "NJ", "NV", "NY", "OK", "OR", "PA", "SC", "SD", "TN", "UT", "VA", "VT", "WV") )
+#US map plot showing how healthcare cost varies by state 
+colnames(NewTabl)[1] <- 'state'
+plot_usmap(data = NewTabl, values = "TotalDrugCost", color = "blue",  ) + 
+  scale_fill_continuous(low = "white", high = "blue", name = "Drug Cost Variation", label = scales::comma) + 
+  labs(title = "USA Region", subtitle = "Drug Cost Variation by State", caption = "Data courtesy of Data.CMS.gov") +
+  theme(legend.position = "right")
+#include =unique(NewTabl$State)
+```
+States with aging population, such as Vermont, show high drug cost.
+
+class: full-scale-fig
+---
 ## Hypothesis 1: Opioids That are Prescribed More Frequently are Supplied for Shorter Time Periods
 ````{r medicare-prec, echo = FALSE, fig.align = 'center', include=TRUE}
 
@@ -65,6 +256,8 @@ lineardata %>%
 
 ```
 ---
+class: full-scale-fig
+
 ##How Long are Opioids Prescribed?
 ```{r density, echo = FALSE, fig.align = 'center', include=TRUE}
 # Density of Type of Opioid and Number Days Supplied
@@ -123,9 +316,3 @@ class: center, middle
 
 # Thanks!
 
-Slides created via the R packages:
-
-[**xaringan**](https://github.com/yihui/xaringan)<br>
-[gadenbuie/xaringanthemer](https://github.com/gadenbuie/xaringanthemer)
-
-The chakra comes from [remark.js](https://remarkjs.com), [**knitr**](http://yihui.name/knitr), and [R Markdown](https://rmarkdown.rstudio.com).
