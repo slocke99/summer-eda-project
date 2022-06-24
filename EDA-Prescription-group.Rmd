@@ -1,0 +1,349 @@
+---
+title: "EDA Project"
+subtitle: "Characterizing Opioid Prescriptions and Claims using Provider Information" 
+author: "Q, Suron, and Tolu"
+date: '`r Sys.Date()`'
+output:
+  xaringan::moon_reader:
+    css: xaringan-themer.css
+    nature:
+      slideNumberFormat: "%current%"
+      highlightStyle: github
+      highlightLines: true
+      ratio: 16:9
+      countIncrementalSlides: true
+
+---
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(
+  fig.width=9, fig.height=3.5, fig.retina=3,
+  out.width = "100%",
+  cache = FALSE,
+  echo = TRUE,
+  message = FALSE, 
+  warning = FALSE,
+  hiline = TRUE)
+
+# Imported imported libraries
+library(tidyverse)
+library(usmap)
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(maps)
+library(ggridges)
+```
+
+``````{r xaringan-themer, include=FALSE, warning=FALSE}
+library(xaringanthemer)
+style_duo_accent(
+  primary_color = "#1381B0",
+  secondary_color = "#FF961C",
+  inverse_header_color = "#FFFFFF"
+)
+#loading packages
+library(tidyverse)
+library(ggrepel)
+#loading medicare data
+medicare <- read_csv("http://www.stat.cmu.edu/cmsac/sure/2022/materials/data/health/eda_projects/medicare_partd_presc_claims.csv")
+#loading state populations data
+populations_2019 <- read_csv("state-populations-2019.csv")
+populations_2019 <- as.vector(populations_2019$population)
+#normalizing claims by population
+avgNumClaims <- medicare %>%
+  group_by(state = State, opioid = OpioidFlag) %>%
+  summarize(sumNumberClaims = sum(NumberClaims))
+avgNumClaims$population <- populations_2019
+avgNumClaims_n <- avgNumClaims %>%
+  mutate(numClaimsPer10000 = sumNumberClaims / population * 10000)
+#filtering for only opioid prescription claims
+opioidOnly <-  avgNumClaims_n %>%
+  filter(opioid == "Opioid")
+
+```
+
+## Medicare Part D Prescription Claims Data
+
+- 51,695 data points proportionally sampled across 50 US States + DC about drugs prescribed by health care providers
+
+--
+
+.pull-left[
+  ### Categorical Variables:
+  - Provider's name, age, city, state, and specialty
+  - Drug name, whether or not the drug is an opioid
+]
+
+--
+
+.pull-right[
+  ### Continuous Variables:
+  - drug cost
+  - number of drug fills, number of days' supply
+  - number of total drug claims, number of drug claims for those aged 65+
+] 
+---
+---
+
+class: center, middle
+
+## Hypothesis: States with smaller populations prescribe more opioids.
+
+
+---
+
+class: full-scale-fig
+
+# Are smaller states prescribing more opioids?
+
+```{r, include=TRUE, fig.align='center', echo=FALSE}
+opioidOnly %>%
+  ggplot(aes(x=log(population), y=numClaimsPer10000, label=state)) +
+  geom_text_repel(color="red", size=2) +
+  scale_color_viridis_c() +
+  labs(x = "log(State Population)", y="Opioid Prescription Claims per 10,000 residents",
+       main="Opioid Prescription Claims by State") +
+  geom_point() +
+  theme_minimal() +
+  theme(axis.title = element_text(size=8))
+```
+
+--
+
+### No.
+
+---
+
+- States with the lowest population have some of the lowest claims for opioid medications in the United States
+
+--
+
+- The state with the highest number of opioid prescriptions (WV) does have a smaller population
+
+--
+
+- States with higher populations (CA, TX) have lower levels of opioid prescriptions
+
+---
+class: center, middle
+
+###Hypothesis/Background:
+
+
+####Opiods might be contributing unnecessarily to the overall drug cost in most state: According to the The SPACE Randomized Clinical Trial, "the use of opioid versus nonopioid drugs did not result in significantly better pain-related illnesses such as back pain and knee pain over 12 months." 
+  -- Krebs EE, Gravely A, Nugent S, et al. Effect of Opioid vs Nonopioid Medications on Pain-Related Function in Patients With Chronic Back Pain or Hip or Knee Osteoarthritis Pain: The SPACE Randomized Clinical Trial. JAMA. 2018
+    
+
+
+
+
+
+```{r, results = "hide",include = FALSE, echo = FALSE}
+#Used the read_csv command to import our drug cost data
+presc_claims <- 
+  read_csv("http://www.stat.cmu.edu/cmsac/sure/2022/materials/data/health/eda_projects/medicare_partd_presc_claims.csv")
+# How the price of Medical oncology drugs Varies By state
+presc_new <- presc_claims %>%
+  select(State, OpioidFlag, TotalDrugCost, BrandName)%>%
+  aggregate(TotalDrugCost ~ OpioidFlag + State  , mean) %>%
+  filter(State %in% c("CA", "FL", "GA", "KS", "KY", "MA", "MD", "MO", "NC",  "NH", "NJ", "NV", "NY", "OK", "OR", "SC", "UT", "VA", "VT", "WV") )%>%
+  filter(TotalDrugCost > 2000)
+NewTabl <- presc_new %>%
+  select(State, TotalDrugCost) %>%
+  aggregate(TotalDrugCost ~ State, mean)
+  #filter(TotalDrugCost > 1000) %>%
+  #filter(State %in% c("AZ","ME", "MI", "MO", "NC", "ND", "NH", "NJ", "NV", "NY", "OK", "OR", "PA", "SC", "SD", "TN", "UT", "VA", "VT", "WV") )
+NewTabl
+```
+---
+###Reasons for higher overall drug cost in some states than others:
+1) Aging population: Vermont, for example is a state with almost 20% being age 65 and above. The older the population, the more access to healthcare will be needed and hence the more opportunity for healthcare providers to drive up cost to make profit
+
+--
+
+2) Cost of living: States such DC, California with high cost of living tend to have higher health care cost. 
+
+--
+
+3)Unhealthy population: The more unhealthy a population is, the more it would have to spend on healthcare 
+
+--
+
+4)Inflation: Drug prices are not immune from the effect of inflation. In fact,during inflation, the prices of health care services increased faster than the cost of other goods and services in the U.S. economy. 
+
+--
+
+5) Lack of government regulation.
+
+
+---
+### Bar chart visualizing how health care cost varies with state
+
+The graph below shows the cost of healthcare in 20 of the most expensive states.
+
+
+```{r , echo = FALSE, fig.align = 'center', include = TRUE}
+# Raw bar chart
+NewTabl %>%
+  ggplot (aes (x=reorder (State, -TotalDrugCost) ,y= TotalDrugCost))+
+  geom_bar(stat ="identity")+
+  theme_bw()
+```
+
+---
+###Data showing how opiod affects the cost of drugs in each states:
+
+```{r, echo = FALSE, fig.align = 'center', include = TRUE}
+#Spine bar chart showing the cost by state with individual opioid and non-opioid proportions
+presc_new %>%
+  ggplot(aes(x = reorder (State, -TotalDrugCost),
+             y = TotalDrugCost,
+             fill = OpioidFlag)) + #<<
+  geom_col() + theme_bw()+
+  ggthemes::scale_fill_colorblind()
+```
+--
+States like New Hampshire have a higher cost of opioids compared to non-opioid drugs. Therefore should consider non-opioids treatment plans.
+---
+class: center
+<center><img src = "https://cdn.howmuch.net/articles/annual-deductible-insurance-c963.png" "height = 400px" /></center)
+
+---
+### US map showing the variation of drug cost by statep
+
+```{r, echo = FALSE, fig.align = 'center', include = TRUE}
+#filtered Healthcare data aggregated by Total drug cost and Opioid flag
+presc_new <- presc_claims %>%
+  select(State, OpioidFlag, TotalDrugCost, BrandName)%>%
+  aggregate(TotalDrugCost ~ OpioidFlag + State  , mean) %>%
+  #filter(State %in% c("CA", "FL", "GA", "KS", "KY", "MA", "MD", "MO", "NC",  "NH", "NJ", "NV", "NY", "OK", "OR", "SC", "UT", "VA", "VT", "WV") )%>%
+  filter(TotalDrugCost > 2000)
+#healthcare data reformatted 
+NewTabl <- presc_new %>%
+  select(State, TotalDrugCost) %>%
+  aggregate(TotalDrugCost ~ State, mean)
+  #filter(TotalDrugCost > 1000) %>%
+  #filter(State %in% c("AZ","ME", "MI", "MO", "NC", "ND", "NH", "NJ", "NV", "NY", "OK", "OR", "PA", "SC", "SD", "TN", "UT", "VA", "VT", "WV") )
+#US map plot showing how healthcare cost varies by state 
+colnames(NewTabl)[1] <- 'state'
+plot_usmap(data = NewTabl, values = "TotalDrugCost", color = "blue",  ) + 
+  scale_fill_continuous(low = "white", high = "blue", name = "Drug Cost Variation", label = scales::comma) + 
+  labs(title = "USA Region", subtitle = "Drug Cost Variation by State", caption = "Data courtesy of Data.CMS.gov") +
+  theme(legend.position = "right")
+#include =unique(NewTabl$State)
+```
+States with aging population, such as Vermont, show high drug cost.
+
+---
+class: center, middle
+## Hypothesis: Opioids That are Prescribed More Frequently are Supplied for Shorter Time Periods.
+---
+````{r medicare-prec, echo = FALSE, fig.align = 'center', include=TRUE}
+
+#Load Data----
+library(tidyverse)
+medicare_prescriptions_data <- read_csv("http://www.stat.cmu.edu/cmsac/sure/2022/materials/data/health/eda_projects/medicare_partd_presc_claims.csv")
+#Linear graph ?
+lineardata <- medicare_prescriptions_data %>%
+  filter(OpioidFlag == "Opioid") %>%
+  #filter(!is.na(NumberMedicareBeneficiaries))%>%
+  filter(NumberDaysSupply <= 20000) 
+#Select Drug Names that are prescribed more than 10 times
+linear_data2 <- lineardata %>%
+  count(GenericName)%>%
+  filter(n >10)
+
+lineardata <- lineardata %>%
+  filter(GenericName %in% linear_data2$GenericName)
+#Bar graph of Drug types
+lineardata %>%
+  ggplot(aes(x= fct_infreq(GenericName)))+
+  geom_bar(stat= "count", fill="darkblue")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  coord_flip()+
+  labs(title="Which Opioids are Prescribed Most Frequently?",y="# of Prescriptions", x="Drug Type")
+
+```
+---
+class: full-scale-fig
+
+##How Long are Opioids Prescribed?
+```{r density, echo = FALSE, fig.align = 'center', include=TRUE}
+# Density of Type of Opioid and Number Days Supplied
+lineardata %>%
+  #library(ggridges)
+  ggplot(aes(x = NumberDaysSupply,
+             y = fct_infreq(GenericName))) +
+  geom_density_ridges(rel_min_height = 0.01) +
+  scale_x_continuous(limits = c(1, 20000))+
+  theme_bw()+
+  labs(y= "Drug Name", x= "# of Days Drug Supplied")
+
+
+```
+
+---
+
+
+##Clustering Medicare Drug Prescriptions by Total Cost and Number of Medicare Beneficaries(TX)
+````{r cluster, echo = FALSE, fig.align = 'center', include=TRUE}
+#Clean Data
+Clean_medicare <- medicare_prescriptions_data %>%
+  filter(State == "TX", !is.na(TotalDrugCost),!is.na(NumberMedicareBeneficiaries)) %>%
+  mutate(log_cost = log(TotalDrugCost), log_benefic = log(NumberMedicareBeneficiaries))%>%
+  mutate(std_log_cost = as.numeric(scale(log_cost, center = TRUE, scale = TRUE)),
+         std_num_medben = as.numeric(scale(log_benefic, center = TRUE, scale = TRUE)))
+#Initial K Means clustering----
+init_kmeans <- 
+  kmeans(dplyr::select(Clean_medicare,
+                       log_cost, NumberMedicareBeneficiaries),
+         algorithm = "Lloyd", centers = 4)
+#Standardized K Mean Cluster
+std_kmeans <- 
+  kmeans(dplyr::select(Clean_medicare,
+                       std_log_cost, std_num_medben),
+         algorithm = "Lloyd", centers = 4)
+Clean_medicare %>%
+  mutate(cost_clusters = 
+           as.factor(std_kmeans$cluster)) %>%
+  ggplot(aes(y= std_log_cost, x=std_num_medben, color=cost_clusters)) +
+  geom_point(alpha=0.5) + 
+  ggthemes::scale_color_colorblind() +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        plot.title = element_text(size = 10),
+        axis.title = element_text(size = 8)) +
+  labs(y="Total Cost",x="# of Medicare Beneficaries", color ="Prescription Clusters")+
+  coord_fixed()
+````
+---
+##Conlcusion:
+--
+
+-Given the high cost of drugs in some states, the state government can implement policies that can help mitigate the effect of inflation and further regulate big pharma drug companies.
+
+--
+
+-Opioids with the highest amount of prescribed were shown to the widest consistient range of days the drug was supplied.
+
+--
+
+-All states with smaller populations don’t have more opioid prescription claims than those with larger populations.
+
+##Limitations
+-Some states had limited data and were excluded from the dataset
+
+--
+
+-Certain variables had a large amount of missing data, and graphs using the data may have been skewed.
+
+--
+
+-Dataset only was from one year, so different associations may have been shown in longitudinal data.
+---
+class: center, middle
+
+# Thanks!
+
